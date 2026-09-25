@@ -81,19 +81,24 @@ Instant tone mapping, color matrix shifts, and organic film grain encoded into c
 * **Binned RAW Dimension Fallbacks**: Populates correct `khw.d, e, f, g` dimensions (`0x7f0`, `0x600`, `0x7e0`, `0x5e8`) in `hpq.aW` and `hpq.aX` for Pixel 10 and 10 Pro.
 * **Eclipse AE Neutralization**: Disables failing Eclipse AE (`camera.use_eclipse` / `kjq.bb = false`) and non-existent Milk hardware pipelines, restoring 100% reliable 12MP photo capture and saving.
 
+### 9. Action Pan & Motion Blur Support for Unsupported Pixels
+* **Unlocking Google's Artificial Restriction**: Google locked Action Pan and Long Exposure (`camera.lasagna`) out of devices like the Pixel 6a (`bluejay`) purely via server-side Phenotype flags and model gating, despite the hardware (Tensor G1 SoC and IMX363 sensor) fully supporting it. When changing device model to Pixel 6 (`oriole`) via root, stock Google Camera runs Action Pan without any errors.
+* **Autonomous Bytecode Patching**: The `ActionPanPatch` unlocks `camera.lasagna` flags via `TomteInitHelper`, forces `njn` mode management to expose `sql.p` (Action Pan) and `sql.o` (Long Exposure) in the mode carousel (`sdo.smali`), and bundles the required neural assets (`motion-custom_op-v6.tflite.uncompressed` and `saliency-custom_op-v6.tflite.uncompressed`).
+* **Available via CLI & Morphe**: Available in Morphe as the patch `"Action Pan & Motion Blur for Unsupported Pixels"` and in the automated build pipeline via `--enable-action-pan`.
+
 ---
 
 ## ⚠️ Technical Limitations & Architectural Constraints
 
 Running a modern Google Camera modded application without root privileges imposes physical hardware and operating system constraints. Below is a detailed breakdown of existing limitations and their underlying technical causes:
 
-### 1. Motion Blur (Action Pan & Long Exposure) Disabled
-* **Observed Behavior**: The Motion Blur mode tab (containing Action Pan and Long Exposure) is intentionally hidden and disabled from the camera mode carousel.
+### 1. Motion Blur (Action Pan & Long Exposure) Gating
+* **Observed Behavior**: By default in clone packages, the Motion Blur mode tab (containing Action Pan and Long Exposure) is suppressed to prevent unprivileged SELinux crashes. However, it can now be cleanly unlocked via the Action Pan patch.
 * **Technical Reason**:
-  1. **SELinux Kernel Sandboxing (`/dev/gxp`)**: Cloned applications (e.g. `com.google.android.GoogleCameraEng`) execute in Android's unprivileged `untrusted_app` SELinux domain. Access to the Google Tensor EdgeTPU character device (`/dev/gxp` / `darwinn`) is restricted at the kernel level via DAC permissions (`0660`, `system:camera`) and SELinux MAC policy (`allow cameraserver gxp_device:chr_file`). Only system-signed, pre-installed apps signed with Google's platform release key can open or issue `ioctl()` commands to the TPU. Any attempt by an untrusted app results in `avc: denied { read write } for path="/dev/gxp"`.
-  2. **Proprietary EdgeTPU Microcode (`edgetpu-custom-op-2`)**: The motion vector and saliency estimation models (`motion-custom_op-p23.tflite.uncompressed` and `saliency-custom_op-p23.tflite.uncompressed`) are compiled exclusively for Tensor's hardware TPU matrix accelerator. They utilize Google proprietary custom operators (`edgetpu-custom-op-2`) that have no CPU or GPU OpenCL fallback implementations in `libgcastartup.so`.
-  3. **Capture Pipeline Hang**: Without TPU access, the native optical flow graph fails during session initialization. In user builds, this causes Action Pan and Long Exposure captures to fail silently or stall indefinitely without saving photos to disk.
-  4. **Architectural Resolution**: All `camera.lasagna` flags (`kkb.f`, `kkb.g`, `kkb.h`, `kkb.i`, `kkb.j`) are intercepted in `klm.smali` (`q()` and `x()`) to return `false`. Google Camera's internal mode manager (`sdo.smali`, `njn.smali`, `iyh.smali`) cleanly prunes Motion Blur from the UI, ensuring 100% crash-free stability for all working modes.
+  1. **SELinux Kernel Sandboxing (`/dev/gxp`)**: Cloned applications (e.g. `com.google.android.GoogleCameraEng`) execute in Android's unprivileged `untrusted_app` SELinux domain. Access to the Google Tensor EdgeTPU character device (`/dev/gxp` / `darwinn`) is restricted at the kernel level via DAC permissions (`0660`, `system:camera`) and SELinux MAC policy (`allow cameraserver gxp_device:chr_file`). System-signed builds or rooted devices have direct access, whereas unrooted clones require software model fallback or EdgeTPU assertion bypass in `libgcastartup.so`.
+  2. **Proprietary EdgeTPU Microcode (`edgetpu-custom-op-2`)**: The motion vector and saliency estimation models (`motion-custom_op-v6.tflite.uncompressed` and `saliency-custom_op-v6.tflite.uncompressed`) are bundled from `motion_blur_asset_module_p26.apk` when the Action Pan patch is active.
+  3. **Artificial Device Blacklist**: On Tensor devices such as the Pixel 6a, Google intentionally suppressed `camera.lasagna` flags (`kkb.f`, `kkb.g`, `kkb.h`, `kkb.i`). Enabling the `"Action Pan & Motion Blur for Unsupported Pixels"` patch restores these flags and activates both modes.
+
 
 ### 2. Live Viewfinder Looks Preview (Pre-Capture)
 * **Observed Behavior**: Camera Looks are applied immediately post-capture during image processing, but do not alter the real-time viewfinder feed before the shutter button is pressed.

@@ -164,3 +164,14 @@ This matrix combines all three investigated features across Pixel Pro devices:
 | **Pixel 7 Pro** | PASS (Samsung GM5 5x) | PASS (Patched) | PASS (`RAW_TELE`) | PASS (`PD_TELE` + Matting) | PASS (Bilateral + HDR) | PASS | **PASS** |
 | **Pixel 6 Pro** | PARTIAL (Samsung GM1 4x)| PASS (Patched) | PARTIAL (4x + 1.25x crop)| PARTIAL (Monocular only) | PASS (Optical blur dominates)| PASS | **PARTIAL** |
 
+---
+
+## Action Pan & Motion Blur Hardware & Unlock Matrix
+
+| Device | Tensor SoC | Camera Sensor | Native Action Pan | Morphe Patched Status | Optical Flow / Saliency Model |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Pixel 6 / 6 Pro** | Tensor G1 | GN1 (50MP) | Native (Stock) | PASS | Native TPU / CPU Fallback |
+| **Pixel 6a (bluejay)** | Tensor G1 | IMX363 (12.2MP) | **Locked by Google** | **PASS (UNLOCKED)** | `motion-custom_op-v6.tflite` + `saliency-custom_op-v6.tflite` |
+| **Pixel 7 / 7 Pro / 7a** | Tensor G2 | GN1 / 64MP | Native (7/7P), Locked (7a) | **PASS (UNLOCKED)** | Native TPU / CPU Fallback |
+| **Pixel 8 / 8 Pro / 8a** | Tensor G3 | GNV / 64MP | Native (8/8P), Locked (8a) | **PASS (UNLOCKED)** | Bundled P26 Neural Assets |
+

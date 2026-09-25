@@ -37,3 +37,21 @@
 **Status: PARTIAL / PASS WITH ADVISORY**
 * Single and moderate-paced photography: **PASS** (image processing functions correctly).
 * Rapid burst photography on 6 GB Pixel 6a: **ADVISORY** (elevated capture latency).
+
+---
+
+### 5. Action Pan & Motion Blur Unlock (Pixel 6a / Bluejay)
+
+#### Reverse Engineering & Root Observation
+* **Empirical Validation**: On rooted Pixel 6a (`bluejay`), altering the system model property `ro.product.model` to `Pixel 6` (`oriole`) followed by a clean install of Google Camera instantly displays the Action Pan and Long Exposure mode selector. Captures process cleanly without optical flow failure or crashes.
+* **Artificial Restriction**:
+  * Google artificially suppressed `camera.lasagna` flags on Pixel 6a via Phenotype server-side configurations and hardcoded device gating, despite the device featuring the identical Tensor G1 SoC (`gs101`), identical TPU core, and IMX363 sensor architecture known to support multi-frame motion alignment.
+* **Smali Gating Structure**:
+  * `kkb.smali`: Declares `camera.lasagna` (`f`), `camera.lasagna_action` (`g`), `camera.lasagna_long_exposure` (`h`), `camera.lasagna_bottom_layer` (`i`), and `camera.lasagna.use_darwinn` (`j`).
+  * `njn.smali`: Constructor reads `kkb.f`, `kkb.g`, `kkb.h` via `klm.q(Lkiz;)Z` to set fields `a`, `b`, and `c`.
+  * `sdo.smali`: Evaluates `njn.a`, `njn.b`, `njn.c` when constructing the mode carousel list (`sdo.N`), adding `sql.p` (Action Pan) and `sql.o` (Long Exposure).
+* **Morphe & Build Script Patch**:
+  * `ActionPanPatch`: Sets `TomteInitHelper.setActionPanEnabled(true)` in `CameraApp.onCreate` and replaces `njn.<init>` to initialize `a, b, c` to `0x1`.
+  * Injects `motion_blur_asset_module_p26.apk` assets (`motion-custom_op-v6.tflite.uncompressed` and `saliency-custom_op-v6.tflite.uncompressed`) into the APK.
+  * Allows Pixel 6a users to utilize Action Pan and Long Exposure seamlessly without requiring device model spoofing or root access.
+

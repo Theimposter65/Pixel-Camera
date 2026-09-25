@@ -168,19 +168,6 @@ def patch_uyv_smali(enable_action_pan=False):
 
     if enable_action_pan:
         content = replace_method(content, "r()Z", "const/4 v0, 0x1\n\n    return v0")
-        target_bluejay = "    iput-boolean v0, p0, Luyv;->N:Z"
-        repl_bluejay = """    iput-boolean v0, p0, Luyv;->N:Z
-
-    if-eqz v0, :cond_not_bluejay
-
-    const/4 v0, 0x1
-
-    iput-boolean v0, p0, Luyv;->M:Z
-
-    :cond_not_bluejay"""
-        if target_bluejay in content and repl_bluejay not in content:
-            content = content.replace(target_bluejay, repl_bluejay)
-            print("    [+] uyv.smali: Set this.M (oriole) when this.N (bluejay) detected.")
 
     with open(uyv_path, "w", encoding="utf-8") as f:
         f.write(content)
@@ -5848,46 +5835,7 @@ def patch_action_pan_shutter(enable_action_pan=False):
         return
     print("[*] Patching Action Pan & Long Exposure Shutter Button clickability...")
 
-    # 1. itk.smali: permit sql.p and sql.o in apply
-    itk_path = os.path.join(APKTOOL_DIR, "smali", "itk.smali")
-    if os.path.exists(itk_path):
-        with open(itk_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        target = ".method public final apply(Ljava/lang/Object;)Ljava/lang/Object;\n    .locals 14"
-        repl = """.method public final apply(Ljava/lang/Object;)Ljava/lang/Object;
-    .locals 14
-
-    iget v0, p0, Litk;->b:I
-
-    const/16 v1, 0x8
-
-    if-ne v0, v1, :cond_orig_itk
-
-    instance-of v0, p1, Lsql;
-
-    if-eqz v0, :cond_orig_itk
-
-    sget-object v0, Lsql;->p:Lsql;
-
-    if-eq p1, v0, :cond_itk_ret_true
-
-    sget-object v0, Lsql;->o:Lsql;
-
-    if-eq p1, v0, :cond_orig_itk
-
-    :cond_itk_ret_true
-    sget-object p0, Ljava/lang/Boolean;->TRUE:Ljava/lang/Boolean;
-
-    return-object p0
-
-    :cond_orig_itk"""
-        if target in content and "cond_itk_ret_true" not in content:
-            content = content.replace(target, repl)
-            with open(itk_path, "w", encoding="utf-8") as f:
-                f.write(content)
-            print("    [+] itk.smali patched: Action Pan & Long Exposure return Boolean.TRUE.")
-
-    # 2. njj.smali: neutralize shutter disabling in Motion Blur state machine
+    # 1. njj.smali: neutralize shutter disabling in Motion Blur state machine
     njj_path = os.path.join(APKTOOL_DIR, "smali_classes2", "njj.smali")
     if os.path.exists(njj_path):
         with open(njj_path, "r", encoding="utf-8") as f:
@@ -5920,7 +5868,7 @@ def patch_action_pan_shutter(enable_action_pan=False):
                 f.write(content)
             print("    [+] njj.smali patched: neutralized shutter disable call in a().")
 
-    # 3. sid.smali: force f()Z to return true
+    # 2. sid.smali: force f()Z to return true
     sid_path = os.path.join(APKTOOL_DIR, "smali_classes2", "sid.smali")
     if os.path.exists(sid_path):
         with open(sid_path, "r", encoding="utf-8") as f:
@@ -5940,7 +5888,7 @@ def patch_action_pan_shutter(enable_action_pan=False):
                 f.write(content)
             print("    [+] sid.smali patched: f() returns true.")
 
-    # 4. ShutterButton.smali: force u()Z to return true
+    # 3. ShutterButton.smali: force u()Z to return true
     sb_path = os.path.join(APKTOOL_DIR, "smali", "com", "google", "android", "apps", "camera", "ui", "shutterbutton", "ShutterButton.smali")
     if os.path.exists(sb_path):
         with open(sb_path, "r", encoding="utf-8") as f:
@@ -5959,51 +5907,6 @@ def patch_action_pan_shutter(enable_action_pan=False):
             with open(sb_path, "w", encoding="utf-8") as f:
                 f.write(content)
             print("    [+] ShutterButton.smali patched: u() returns true.")
-
-    # 5. ojd.smali: re-enable shutter in ojd.l()
-    ojd_path = os.path.join(APKTOOL_DIR, "smali_classes2", "ojd.smali")
-    if os.path.exists(ojd_path):
-        with open(ojd_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        target_ojd = """    iget-object v3, p0, Lojd;->D:Luep;
-
-    iget-object v4, p0, Lojd;->g:Lsia;
-
-    iget-object v5, p0, Lojd;->S:Lsie;
-
-    invoke-interface {v4, v5}, Lsia;->q(Lsie;)Lula;
-
-    move-result-object v4
-
-    invoke-virtual {v3, v4}, Luep;->e(Lula;)V"""
-        repl_ojd = """    iget-object v3, p0, Lojd;->D:Luep;
-
-    iget-object v4, p0, Lojd;->g:Lsia;
-
-    iget-object v5, p0, Lojd;->S:Lsie;
-
-    invoke-interface {v4, v5}, Lsia;->q(Lsie;)Lula;
-
-    move-result-object v4
-
-    invoke-virtual {v3, v4}, Luep;->e(Lula;)V
-
-    iget-object v0, p0, Lojd;->g:Lsia;
-
-    if-eqz v0, :cond_skip_sia
-
-    const/4 v1, 0x1
-
-    sget-object v2, Lshz;->a:Lshz;
-
-    invoke-interface {v0, v1, v2}, Lsia;->Z(ZLshz;)V
-
-    :cond_skip_sia"""
-        if target_ojd in content and "cond_skip_sia" not in content:
-            content = content.replace(target_ojd, repl_ojd)
-            with open(ojd_path, "w", encoding="utf-8") as f:
-                f.write(content)
-            print("    [+] ojd.smali patched: shutter re-enabled on module start.")
 
 
 def inject_splits(enable_action_pan=False):

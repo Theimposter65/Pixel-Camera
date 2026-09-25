@@ -112,5 +112,13 @@ class SmokeTest {
         assertTrue(patch.name == "Action Pan & Motion Blur for Unsupported Pixels")
         assertTrue(patch.description?.contains("Action Pan") == true)
     }
+
+    @Test
+    fun testPatchesListContainsActionPan() {
+        val file = java.io.File("../../patches-list.json")
+        assertTrue(file.exists())
+        val content = file.readText()
+        assertTrue(content.contains("Action Pan & Motion Blur for Unsupported Pixels"))
+    }
 }
 

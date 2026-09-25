@@ -2,6 +2,7 @@ package app.morphe.patches.pixelcamera
 
 import app.morphe.patcher.Patcher
 import app.morphe.patcher.PatcherConfig
+import app.morphe.patches.pixelcamera.actionpan.actionPanPatch
 import app.morphe.patches.pixelcamera.clone.pixelCameraClonePatch
 import app.morphe.patches.pixelcamera.creator.creatorSuitePatch
 import app.morphe.patches.pixelcamera.looks.cameraLooksPatch
@@ -33,6 +34,7 @@ class PatcherExecutionTest {
         val patcher = Patcher(config)
         patcher += setOf(
             cameraLooksPatch,
+            actionPanPatch,
             quickAccessPatch,
             telephotoPortraitAndZoomPatch,
             portraitModeFixPatch,
@@ -41,6 +43,7 @@ class PatcherExecutionTest {
             creatorSuitePatch,
             pixelCameraClonePatch
         )
+
         patcher.invoke().collect { result ->
             println("Patch result: $result")
         }

@@ -105,5 +105,12 @@ class SmokeTest {
         assertTrue(content.contains("sActionPanEnabled"), "TomteInitHelper must have sActionPanEnabled field")
         assertTrue(content.contains("setActionPanEnabled"), "TomteInitHelper must have setActionPanEnabled method")
     }
+
+    @Test
+    fun testActionPanPatchDefinition() {
+        val patch = app.morphe.patches.pixelcamera.actionpan.actionPanPatch
+        assertTrue(patch.name == "Action Pan & Motion Blur for Unsupported Pixels")
+        assertTrue(patch.description?.contains("Action Pan") == true)
+    }
 }
 

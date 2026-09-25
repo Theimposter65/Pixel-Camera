@@ -129,6 +129,84 @@ class SmokeTest {
         assertTrue(content.contains("Action Pan & Motion Blur for Unsupported Pixels"))
         assertTrue(content.contains("Theimposter65/Pixel-Camera"))
     }
+
+    @Test
+    fun testVerifyActionPanPatches() {
+        val dexDir = java.io.File("build/tmp/test_patcher/patched_dex")
+        if (!dexDir.exists()) return
+
+        var verifiedUyv = false
+        var verifiedNjn = false
+        var verifiedNjj = false
+        var verifiedSid = false
+        var verifiedShutterButton = false
+        var verifiedKlm = false
+
+        for (dexFile in dexDir.listFiles()?.sortedBy { it.name } ?: emptyList()) {
+            if (!dexFile.name.endsWith(".dex")) continue
+            val dex = com.android.tools.smali.dexlib2.DexFileFactory.loadDexFile(dexFile, com.android.tools.smali.dexlib2.Opcodes.getDefault())
+            for (c in dex.classes) {
+                if (c.type == "Luyv;") {
+                    val rMethod = c.methods.firstOrNull { it.name == "r" }
+                    if (rMethod != null) {
+                        val ins = rMethod.implementation?.instructions?.toList() ?: emptyList()
+                        println("uyv.r instructions: ${ins.joinToString { it.opcode.name }}")
+                        assertTrue(ins.any { it.opcode == com.android.tools.smali.dexlib2.Opcode.CONST_4 })
+                        verifiedUyv = true
+                    }
+                }
+                if (c.type == "Lnjn;") {
+                    val initMethod = c.methods.firstOrNull { it.name == "<init>" }
+                    if (initMethod != null) {
+                        val ins = initMethod.implementation?.instructions?.toList() ?: emptyList()
+                        println("njn.<init> instructions: ${ins.joinToString { it.opcode.name }}")
+                        assertTrue(ins.any { it.opcode == com.android.tools.smali.dexlib2.Opcode.IPUT_BOOLEAN })
+                        verifiedNjn = true
+                    }
+                }
+                if (c.type == "Lnjj;") {
+                    val aMethod = c.methods.firstOrNull { it.name == "a" }
+                    if (aMethod != null) {
+                        val ins = aMethod.implementation?.instructions?.toList() ?: emptyList()
+                        println("njj.a instructions: ${ins.joinToString { it.opcode.name }}")
+                        assertTrue(ins.all { it.opcode == com.android.tools.smali.dexlib2.Opcode.RETURN_VOID })
+                        verifiedNjj = true
+                    }
+                }
+                if (c.type == "Lsid;") {
+                    val fMethod = c.methods.firstOrNull { it.name == "f" }
+                    if (fMethod != null) {
+                        val ins = fMethod.implementation?.instructions?.toList() ?: emptyList()
+                        println("sid.f instructions: ${ins.joinToString { it.opcode.name }}")
+                        assertTrue(ins.any { it.opcode == com.android.tools.smali.dexlib2.Opcode.CONST_4 })
+                        verifiedSid = true
+                    }
+                }
+                if (c.type == "Lcom/google/android/apps/camera/ui/shutterbutton/ShutterButton;") {
+                    val uMethod = c.methods.firstOrNull { it.name == "u" }
+                    if (uMethod != null) {
+                        val ins = uMethod.implementation?.instructions?.toList() ?: emptyList()
+                        println("ShutterButton.u instructions: ${ins.joinToString { it.opcode.name }}")
+                        assertTrue(ins.any { it.opcode == com.android.tools.smali.dexlib2.Opcode.CONST_4 })
+                        verifiedShutterButton = true
+                    }
+                }
+                if (c.type == "Lklm;") {
+                    if (c.methods.any { it.name == "original_q" }) {
+                        verifiedKlm = true
+                    }
+                }
+            }
+        }
+
+        assertTrue(verifiedUyv, "uyv.r must be patched")
+        assertTrue(verifiedNjn, "njn.<init> must be patched")
+        assertTrue(verifiedNjj, "njj.a must be patched to return void")
+        assertTrue(verifiedSid, "sid.f must be patched")
+        assertTrue(verifiedShutterButton, "ShutterButton.u must be patched")
+        assertTrue(verifiedKlm, "klm must be hooked via TomteInitHelper")
+        println("All Action Pan and ShutterButton bytecode patches successfully verified in DEX output!")
+    }
 }
 
 

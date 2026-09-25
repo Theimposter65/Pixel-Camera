@@ -20,6 +20,8 @@ import shutil
 import zipfile
 import subprocess
 import re
+import argparse
+
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 APKTOOL_DIR = os.path.join(ROOT_DIR, "apktool_full")
@@ -168,14 +170,16 @@ def patch_uyv_smali():
         f.write(content)
     print("    [+] uyv.smali patched: l() returns true (sauce eligible). g() and f() preserved.")
 
-def patch_klm_smali():
-    print("[*] Patching klm.smali (Gouda flags, Mantis, Looks, Segmenter model interception)...")
+def patch_klm_smali(enable_action_pan=False):
+    print(f"[*] Patching klm.smali (Gouda flags, Mantis, Looks, Segmenter model interception, action_pan={enable_action_pan})...")
     klm_path = os.path.join(APKTOOL_DIR, "smali_classes2", "klm.smali")
     if not os.path.exists(klm_path):
         print("    [!] Warning: klm.smali not found.")
         return
     with open(klm_path, "r", encoding="utf-8") as f:
         content = f.read()
+
+    lasagna_ret = "const/4 v0, 0x1" if enable_action_pan else "const/4 v0, 0x0"
 
     # 1. Patch q(Lkiz;)Z
     q_start = content.find(".method public final q(Lkiz;)Z")
@@ -201,10 +205,10 @@ def patch_klm_smali():
 
     if-eqz v1, :cond_check_use_eclipse
 
-    const/4 v0, 0x0
+    __LASAGNA_RET__
 
     return v0
-
+""".replace("__LASAGNA_RET__", lasagna_ret) + """
     :cond_check_use_eclipse
     const-string v1, "camera.use_eclipse"
 
@@ -923,15 +927,16 @@ def patch_klm_smali():
     content = content.replace(target_kkn_q, repl_kkn_q)
 
     # 6. Disable all camera.lasagna flags in klm.smali initialization (f=lasagna, g=action, h=long_exposure, i=bottom_layer, j=use_darwinn)
-    for fld in ["f", "g", "h", "i", "j"]:
-        for reg in ["p2", "p5"]:
-            old_str = f"""    sget-object {reg}, Lkkb;->{fld}:Lkiz;
+    if not enable_action_pan:
+        for fld in ["f", "g", "h", "i", "j"]:
+            for reg in ["p2", "p5"]:
+                old_str = f"""    sget-object {reg}, Lkkb;->{fld}:Lkiz;
 
     invoke-virtual {{p0, {reg}, v7}}, Lklm;->n(Lkiz;Z)V"""
-            new_str = f"""    sget-object {reg}, Lkkb;->{fld}:Lkiz;
+                new_str = f"""    sget-object {reg}, Lkkb;->{fld}:Lkiz;
 
     invoke-virtual {{p0, {reg}, v6}}, Lklm;->n(Lkiz;Z)V"""
-            content = content.replace(old_str, new_str)
+                content = content.replace(old_str, new_str)
 
     with open(klm_path, "w", encoding="utf-8") as f:
         f.write(content)
@@ -2432,8 +2437,8 @@ def patch_qau_smali():
     else:
         print("    [!] Warning: Exact target block not found in qau.smali, skipping replacement.")
 
-def patch_camera_app_smali():
-    print("[*] Patching CameraApp.smali (Bypassing split check and saving static context)...")
+def patch_camera_app_smali(enable_action_pan=False):
+    print(f"[*] Patching CameraApp.smali (Bypassing split check, saving static context, action_pan={enable_action_pan})...")
     camera_app_path = os.path.join(APKTOOL_DIR, "smali", "com", "google", "android", "apps", "camera", "app", "CameraApp.smali")
     with open(camera_app_path, "r", encoding="utf-8") as f:
         content = f.read()
@@ -2470,15 +2475,17 @@ def patch_camera_app_smali():
         f_target = ".field private static final p:Ljava/util/concurrent/atomic/AtomicBoolean;"
         content = content.replace(f_target, f_target + "\n\n.field public static sAppContext:Landroid/content/Context;")
 
-    # Hook onCreate to save sAppContext
+    # Hook onCreate to save sAppContext and optionally enable Action Pan
     on_create_target = ".method public final onCreate()V\n    .locals 19\n\n    move-object/from16 v0, p0"
-    on_create_repl = ".method public final onCreate()V\n    .locals 19\n\n    sput-object p0, Lcom/google/android/apps/camera/app/CameraApp;->sAppContext:Landroid/content/Context;\n\n    move-object/from16 v0, p0"
+    action_pan_init = "\n\n    const/4 v1, 0x1\n\n    invoke-static {v1}, Lcom/google/android/patch/cameralooks/TomteInitHelper;->setActionPanEnabled(Z)V\n\n    invoke-static {v1}, Lcom/google/android/patch/cameralooks/TomteInitHelper;->setActionPanUseDarwinn(Z)V" if enable_action_pan else ""
+    on_create_repl = f".method public final onCreate()V\n    .locals 19\n\n    sput-object p0, Lcom/google/android/apps/camera/app/CameraApp;->sAppContext:Landroid/content/Context;{action_pan_init}\n\n    move-object/from16 v0, p0"
     if on_create_target in content:
         content = content.replace(on_create_target, on_create_repl)
 
     with open(camera_app_path, "w", encoding="utf-8") as f:
         f.write(content)
     print("    [+] CameraApp.smali patched successfully.")
+
 
 def inject_tomte_init_helper():
     print("[*] Injecting TomteInitHelper...")
@@ -5582,8 +5589,9 @@ def patch_sauce_onboarding():
         else:
             print("    [!] Warning: isu.smali target not found.")
 
-def patch_creator_suite_smali():
+def patch_creator_suite_smali(enable_action_pan=False):
     print("[*] Patching Creator Suite (Granite, Biotite, Mica, Slate, Basalt, Project Album)...")
+    lasagna_ret_x = "const/4 v0, 0x1" if enable_action_pan else "const/4 v0, 0x0"
     # 1. kid.smali
     kid_path = os.path.join(APKTOOL_DIR, "smali", "kid.smali")
     if os.path.exists(kid_path):
@@ -5725,7 +5733,7 @@ def patch_creator_suite_smali():
 
     if-eqz v1, :cond_check_creator_x_0
 
-    const/4 v0, 0x0
+    {lasagna_ret_x}
 
     return v0
 
@@ -5783,8 +5791,45 @@ def patch_sdo_smali():
     else:
         print("    [!] Warning: sdo.smali target block not found.")
 
-def inject_splits():
-    print("[*] Injecting dynamic native libraries and neural assets from feature splits...")
+def patch_njn_smali(enable_action_pan=False):
+    if not enable_action_pan:
+        return
+    print("[*] Patching njn.smali (Action Pan & Long Exposure mode enablement)...")
+    njn_path = os.path.join(APKTOOL_DIR, "smali", "njn.smali")
+    if not os.path.exists(njn_path):
+        print("    [!] Warning: njn.smali not found.")
+        return
+    with open(njn_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    init_start = content.find(".method public constructor <init>(Lklm;)V")
+    if init_start != -1:
+        init_end = content.find(".end method", init_start) + len(".end method")
+        new_init = """.method public constructor <init>(Lklm;)V
+    .locals 1
+
+    invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+
+    const/4 v0, 0x1
+
+    iput-boolean v0, p0, Lnjn;->a:Z
+
+    iput-boolean v0, p0, Lnjn;->b:Z
+
+    iput-boolean v0, p0, Lnjn;->c:Z
+
+    return-void
+.end method"""
+        content = content[:init_start] + new_init + content[init_end:]
+        with open(njn_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        print("    [+] njn.smali patched successfully for Action Pan.")
+    else:
+        print("    [!] Warning: constructor not found in njn.smali")
+
+
+def inject_splits(enable_action_pan=False):
+    print(f"[*] Injecting dynamic native libraries and neural assets from feature splits (action_pan={enable_action_pan})...")
     
     # 1. Native libraries from all split modules (arm64-v8a)
     target_lib_dir = os.path.join(APKTOOL_DIR, "lib", "arm64-v8a")
@@ -5801,24 +5846,32 @@ def inject_splits():
                             with zf.open(item) as src, open(target_file, "wb") as dst:
                                 shutil.copyfileobj(src, dst)
 
+    def find_split_apk(*candidates):
+        for c in candidates:
+            cand_path = os.path.join(ROOT_DIR, "extracted_apkm", c)
+            if os.path.exists(cand_path):
+                return cand_path
+        return None
+
     # 2. neural models from split_all_in_feature_module_p26.apk
-    split_all_in = os.path.join(ROOT_DIR, "extracted_apkm", "split_all_in_feature_module_p26.apk")
+    split_all_in = find_split_apk("split_all_in_feature_module_p26.apk", "all_in_feature_module_p26.apk")
     target_assets_dir = os.path.join(APKTOOL_DIR, "assets")
     os.makedirs(target_assets_dir, exist_ok=True)
 
-    with zipfile.ZipFile(split_all_in, "r") as zf:
-        for item in zf.namelist():
-            if item.startswith("assets/") and not item.endswith("/"):
-                rel_path = item[len("assets/"):]
-                out_path = os.path.join(target_assets_dir, rel_path)
-                os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                if not os.path.exists(out_path):
-                    with zf.open(item) as src, open(out_path, "wb") as dst:
-                        shutil.copyfileobj(src, dst)
+    if split_all_in and os.path.exists(split_all_in):
+        with zipfile.ZipFile(split_all_in, "r") as zf:
+            for item in zf.namelist():
+                if item.startswith("assets/") and not item.endswith("/"):
+                    rel_path = item[len("assets/"):]
+                    out_path = os.path.join(target_assets_dir, rel_path)
+                    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                    if not os.path.exists(out_path):
+                        with zf.open(item) as src, open(out_path, "wb") as dst:
+                            shutil.copyfileobj(src, dst)
 
     # 2b. Tomte Film Grain neural model from split_hdrplus_asset_module_p26.apk
-    split_hdrplus = os.path.join(ROOT_DIR, "extracted_apkm", "split_hdrplus_asset_module_p26.apk")
-    if os.path.exists(split_hdrplus):
+    split_hdrplus = find_split_apk("split_hdrplus_asset_module_p26.apk", "hdrplus_asset_module_p26.apk")
+    if split_hdrplus and os.path.exists(split_hdrplus):
         with zipfile.ZipFile(split_hdrplus, "r") as zf:
             for item in zf.namelist():
                 if "3cdbac706c98421a96e16fdbfd97a35f" in item:
@@ -5829,9 +5882,23 @@ def inject_splits():
                         shutil.copyfileobj(src, dst)
                     print(f"    [+] Injected Tomte grain model -> {out_path}")
 
+    # 2c. Motion Blur / Action Pan models from motion_blur_asset_module_p26.apk
+    if enable_action_pan:
+        split_mb = find_split_apk("split_motion_blur_asset_module_p26.apk", "motion_blur_asset_module_p26.apk")
+        if split_mb and os.path.exists(split_mb):
+            with zipfile.ZipFile(split_mb, "r") as zf:
+                for item in zf.namelist():
+                    if item.startswith("assets/") and not item.endswith("/"):
+                        rel_path = item[len("assets/"):]
+                        out_path = os.path.join(target_assets_dir, rel_path)
+                        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                        with zf.open(item) as src, open(out_path, "wb") as dst:
+                            shutil.copyfileobj(src, dst)
+                        print(f"    [+] Injected Action Pan model -> {out_path}")
+
     # 3. camera_vkp assets from split_camera_vkp_asset_module.apk
-    split_vkp = os.path.join(ROOT_DIR, "extracted_apkm", "split_camera_vkp_asset_module.apk")
-    if os.path.exists(split_vkp):
+    split_vkp = find_split_apk("split_camera_vkp_asset_module.apk", "camera_vkp_asset_module.apk")
+    if split_vkp and os.path.exists(split_vkp):
         with zipfile.ZipFile(split_vkp, "r") as zf:
             for item in zf.namelist():
                 if item.startswith("assets/") and not item.endswith("/"):
@@ -6068,17 +6135,23 @@ def install_and_launch(signed_apk):
         print("    [+] App launched successfully!")
 
 def main():
+    parser = argparse.ArgumentParser(description="Pixel Camera build and patching pipeline")
+    parser.add_argument("--enable-action-pan", action="store_true", help="Enable Action Pan and Motion Blur for unsupported Pixels (Pixel 6a, etc.)")
+    parser.add_argument("--skip-build", action="store_true", help="Skip APK recompilation, alignment, signing, and installation")
+    parser.add_argument("--skip-install", action="store_true", help="Skip ADB install and launch")
+    args = parser.parse_args()
+
     clean_build_artifacts()
     patch_manifest()
     patch_app_name()
     patch_uyv_smali()
     patch_qau_smali()
-    patch_camera_app_smali()
+    patch_camera_app_smali(enable_action_pan=args.enable_action_pan)
     inject_tomte_init_helper()
     patch_qkp_smali()
     patch_qkq_smali()
     patch_qmy_smali()
-    patch_klm_smali()
+    patch_klm_smali(enable_action_pan=args.enable_action_pan)
     patch_hpq_smali()
     patch_mkm_smali()
     patch_ejn_smali()
@@ -6115,15 +6188,23 @@ def main():
     patch_pro_controls_live()
     patch_sauce_onboarding()
     patch_sdo_smali()
-    patch_creator_suite_smali()
-    inject_splits()
+    patch_njn_smali(enable_action_pan=args.enable_action_pan)
+    patch_creator_suite_smali(enable_action_pan=args.enable_action_pan)
+    inject_splits(enable_action_pan=args.enable_action_pan)
     patch_libgcastartup()
     balance_dex_limits()
+
+    if args.skip_build:
+        print("\n[*] --skip-build set: skipping apktool compile, signing, and install.")
+        return
+
     ensure_keystore()
     signed_apk = build_and_sign()
     copy_to_desktop(signed_apk)
-    install_and_launch(signed_apk)
+    if not args.skip_install:
+        install_and_launch(signed_apk)
     print(f"\n[SUCCESS] PixelCamera standalone build ready at: {signed_apk}")
+
 
 if __name__ == "__main__":
     main()

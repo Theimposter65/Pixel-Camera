@@ -14,6 +14,10 @@
 
 .field public static sLastSelectedLook:Lqlh;
 
+.field public static sActionPanEnabled:Z
+
+.field public static sActionPanUseDarwinn:Z
+
 
 # direct methods
 .method static constructor <clinit>()V
@@ -36,6 +40,26 @@
     const/4 v0, 0x0
 
     sput-object v0, Lcom/google/android/patch/cameralooks/TomteInitHelper;->sLastSelectedLook:Lqlh;
+
+    sput-boolean v0, Lcom/google/android/patch/cameralooks/TomteInitHelper;->sActionPanEnabled:Z
+
+    sput-boolean v0, Lcom/google/android/patch/cameralooks/TomteInitHelper;->sActionPanUseDarwinn:Z
+
+    return-void
+.end method
+
+.method public static setActionPanEnabled(Z)V
+    .locals 0
+
+    sput-boolean p0, Lcom/google/android/patch/cameralooks/TomteInitHelper;->sActionPanEnabled:Z
+
+    return-void
+.end method
+
+.method public static setActionPanUseDarwinn(Z)V
+    .locals 0
+
+    sput-boolean p0, Lcom/google/android/patch/cameralooks/TomteInitHelper;->sActionPanUseDarwinn:Z
 
     return-void
 .end method
@@ -513,6 +537,32 @@
 
     if-eqz v0, :cond_check_ark_lens
 
+    sget-boolean v0, Lcom/google/android/patch/cameralooks/TomteInitHelper;->sActionPanEnabled:Z
+
+    if-eqz v0, :cond_lasagna_disabled
+
+    const-string v0, "camera.lasagna.use_darwinn"
+
+    invoke-virtual {p0, v0}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v0
+
+    if-eqz v0, :cond_lasagna_true
+
+    sget-boolean v0, Lcom/google/android/patch/cameralooks/TomteInitHelper;->sActionPanUseDarwinn:Z
+
+    if-eqz v0, :cond_lasagna_false
+
+    const/4 v0, 0x1
+
+    return v0
+
+    :cond_lasagna_true
+    const/4 v0, 0x1
+
+    return v0
+
+    :cond_lasagna_disabled
     const-string v0, "camera.lasagna.use_darwinn"
 
     invoke-virtual {p0, v0}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z

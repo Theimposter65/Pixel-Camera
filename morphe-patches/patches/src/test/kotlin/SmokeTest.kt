@@ -95,5 +95,15 @@ class SmokeTest {
         photoSavingDexOut.copyTo(java.io.File("../src/main/resources/PhotoSavingControllers.dex"), overwrite = true)
         photoSavingDexOut.copyTo(java.io.File(rootDir, "scratch/PhotoSavingControllers.dex"), overwrite = true)
     }
+
+    @Test
+    fun testTomteInitHelperActionPanSupport() {
+        val rootDir = java.io.File("../..")
+        val tomteSmali = java.io.File(rootDir, "smali_patches/TomteInitHelper.smali")
+        assertTrue(tomteSmali.exists(), "TomteInitHelper.smali must exist")
+        val content = tomteSmali.readText()
+        assertTrue(content.contains("sActionPanEnabled"), "TomteInitHelper must have sActionPanEnabled field")
+        assertTrue(content.contains("setActionPanEnabled"), "TomteInitHelper must have setActionPanEnabled method")
+    }
 }
 

@@ -3,6 +3,11 @@ package app.morphe.patches.pixelcamera.actionpan
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.util.smali.toInstructions
 import app.morphe.patches.pixelcamera.PixelCameraPatchUtils
+import com.android.tools.smali.dexlib2.Opcode
+import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction20t
+import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction21t
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+import com.android.tools.smali.dexlib2.iface.reference.FieldReference
 
 val actionPanPatch = bytecodePatch(
     name = "Action Pan & Motion Blur for Unsupported Pixels",
@@ -72,6 +77,67 @@ val actionPanPatch = bytecodePatch(
         // ── 7. Ensure ShutterButton clickability validation always passes (ShutterButton.u()Z -> true) ──
         mutableClassDefByOrNull("Lcom/google/android/apps/camera/ui/shutterbutton/ShutterButton;")?.let { clazz ->
             PixelCameraPatchUtils.forceReturnTrue(clazz, "u")
+        }
+
+        // ── 8. Force Losq readiness: override constructor to always set isReady=true, status=READY ──
+        mutableClassDefByOrNull("Losq;")?.let { clazz ->
+            clazz.methods.firstOrNull {
+                it.name == "<init>" && it.parameterTypes == listOf("Z", "Losp;")
+            }?.let { method ->
+                val impl = method.implementation ?: return@let
+                val initSmali = """
+                    invoke-direct {p0}, Ljava/lang/Object;-><init>()V
+                    const/4 p1, 0x1
+                    iput-boolean p1, p0, Losq;->a:Z
+                    sget-object p2, Losp;->a:Losp;
+                    iput-object p2, p0, Losq;->b:Losp;
+                    return-void
+                """.trimIndent()
+                val newInstructions = initSmali.toInstructions(method)
+                try {
+                    val field = impl.javaClass.getDeclaredField("tryBlocks")
+                    field.isAccessible = true
+                    (field.get(impl) as? MutableList<*>)?.clear()
+                } catch (_: Throwable) {}
+                while (impl.instructions.isNotEmpty()) {
+                    impl.removeInstruction(0)
+                }
+                for (ins in newInstructions) {
+                    impl.addInstruction(ins)
+                }
+            }
+        }
+
+        // ── 9. Defense-in-depth: bypass Losq readiness check in ojd.n() (takePictureNow) ──
+        mutableClassDefByOrNull("Lojd;")?.let { clazz ->
+            clazz.methods.firstOrNull {
+                it.name == "n" && it.returnType == "V" && it.parameterTypes.isEmpty()
+            }?.let { method ->
+                val impl = method.implementation ?: return@let
+                val instructions = impl.instructions.toList()
+                for (i in instructions.indices) {
+                    val ins = instructions[i]
+                    if (ins.opcode == Opcode.IF_NEZ && i > 0) {
+                        val prev = instructions[i - 1]
+                        if (prev.opcode == Opcode.IGET_BOOLEAN) {
+                            val fieldRef = (prev as? ReferenceInstruction)?.reference as? FieldReference
+                            if (fieldRef != null &&
+                                fieldRef.definingClass == "Losq;" &&
+                                fieldRef.name == "a" &&
+                                fieldRef.type == "Z") {
+                                val ifNezIns = ins as BuilderInstruction21t
+                                val target = ifNezIns.target
+                                impl.replaceInstruction(i,
+                                    BuilderInstruction20t(
+                                        Opcode.GOTO_16, target
+                                    )
+                                )
+                                break
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

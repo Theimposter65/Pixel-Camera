@@ -207,6 +207,90 @@ class SmokeTest {
         assertTrue(verifiedKlm, "klm must be hooked via TomteInitHelper")
         println("All Action Pan and ShutterButton bytecode patches successfully verified in DEX output!")
     }
+
+    @Test
+    fun testVerifyLosqReadinessPatch() {
+        val dexDir = java.io.File("build/tmp/test_patcher/patched_dex")
+        if (!dexDir.exists()) return
+
+        var verifiedLosqInit = false
+        for (dexFile in dexDir.listFiles()?.sortedBy { it.name } ?: emptyList()) {
+            if (!dexFile.name.endsWith(".dex")) continue
+            val dex = com.android.tools.smali.dexlib2.DexFileFactory.loadDexFile(
+                dexFile, com.android.tools.smali.dexlib2.Opcodes.getDefault()
+            )
+            for (c in dex.classes) {
+                if (c.type == "Losq;") {
+                    val initMethod = c.methods.firstOrNull {
+                        it.name == "<init>" && it.parameterTypes.toList() == listOf("Z", "Losp;")
+                    }
+                    if (initMethod != null) {
+                        val ins = initMethod.implementation?.instructions?.toList() ?: emptyList()
+                        val opcodes = ins.map { it.opcode }
+                        println("Losq.<init>(ZLosp;)V opcodes: ${opcodes.joinToString()}")
+                        assertTrue(opcodes.contains(com.android.tools.smali.dexlib2.Opcode.CONST_4),
+                            "Losq constructor must contain CONST_4 for forced isReady=true")
+                        assertTrue(opcodes.contains(com.android.tools.smali.dexlib2.Opcode.SGET_OBJECT),
+                            "Losq constructor must contain SGET_OBJECT for Losp.READY")
+                        val sgetIns = ins.firstOrNull { it.opcode == com.android.tools.smali.dexlib2.Opcode.SGET_OBJECT }
+                        if (sgetIns is com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction) {
+                            val ref = sgetIns.reference as? com.android.tools.smali.dexlib2.iface.reference.FieldReference
+                            assertTrue(ref?.definingClass == "Losp;" && ref.name == "a",
+                                "SGET_OBJECT must reference Losp;->a (READY)")
+                        }
+                        verifiedLosqInit = true
+                    }
+                }
+            }
+        }
+        assertTrue(verifiedLosqInit, "Losq.<init>(ZLosp;)V must be patched to force READY")
+        println("Losq readiness constructor patch verified!")
+    }
+
+    @Test
+    fun testVerifyOjdReadinessBypass() {
+        val dexDir = java.io.File("build/tmp/test_patcher/patched_dex")
+        if (!dexDir.exists()) return
+
+        var verifiedOjdN = false
+        for (dexFile in dexDir.listFiles()?.sortedBy { it.name } ?: emptyList()) {
+            if (!dexFile.name.endsWith(".dex")) continue
+            val dex = com.android.tools.smali.dexlib2.DexFileFactory.loadDexFile(
+                dexFile, com.android.tools.smali.dexlib2.Opcodes.getDefault()
+            )
+            for (c in dex.classes) {
+                if (c.type == "Lojd;") {
+                    val nMethod = c.methods.firstOrNull {
+                        it.name == "n" && it.returnType == "V" && it.parameterTypes.isEmpty()
+                    }
+                    if (nMethod != null) {
+                        val ins = nMethod.implementation?.instructions?.toList() ?: emptyList()
+                        var foundBypass = false
+                        for (i in ins.indices) {
+                            if (ins[i].opcode == com.android.tools.smali.dexlib2.Opcode.IGET_BOOLEAN) {
+                                val ref = (ins[i] as? com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction)
+                                    ?.reference as? com.android.tools.smali.dexlib2.iface.reference.FieldReference
+                                if (ref?.definingClass == "Losq;" && ref.name == "a" && i + 1 < ins.size) {
+                                    val next = ins[i + 1]
+                                    assertTrue(
+                                        next.opcode == com.android.tools.smali.dexlib2.Opcode.GOTO ||
+                                        next.opcode == com.android.tools.smali.dexlib2.Opcode.GOTO_16,
+                                        "Expected GOTO after Losq.a check, found ${next.opcode}"
+                                    )
+                                    foundBypass = true
+                                }
+                            }
+                        }
+                        assertTrue(foundBypass, "ojd.n() must have Losq readiness gate replaced with GOTO")
+                        verifiedOjdN = true
+                    }
+                }
+            }
+        }
+        assertTrue(verifiedOjdN, "ojd.n() readiness bypass must be in patched DEX")
+        println("ojd.n() readiness bypass verified!")
+    }
 }
+
 
 

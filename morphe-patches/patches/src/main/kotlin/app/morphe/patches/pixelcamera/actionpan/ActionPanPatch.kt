@@ -3,16 +3,16 @@ package app.morphe.patches.pixelcamera.actionpan
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.util.smali.toInstructions
 import app.morphe.patches.pixelcamera.PixelCameraPatchUtils
-import app.morphe.patches.pixelcamera.looks.cameraLooksPatch
-
 val actionPanPatch = bytecodePatch(
     name = "Action Pan & Motion Blur for Unsupported Pixels",
     description = "Unlocks Google's Action Pan and Long Exposure modes on unsupported Tensor devices (e.g. Pixel 6a bluejay) by clearing Google's device restrictions and enabling the lasagna capture pipeline."
 ) {
-    dependsOn(cameraLooksPatch)
+    extendWith("TomteInitHelper.dex")
+
     compatibleWith(
         "com.google.android.GoogleCamera" to setOf("11.0.073.972752740.32")
     )
+
     execute {
         // ── 1. Enable Action Pan flag resolution in TomteInitHelper on CameraApp start ──
         mutableClassDefByOrNull("Lcom/google/android/apps/camera/app/CameraApp;")?.let { clazz ->

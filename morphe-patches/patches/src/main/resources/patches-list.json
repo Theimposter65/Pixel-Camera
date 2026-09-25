@@ -1,5 +1,5 @@
 {
-  "version": "1.0.3",
+  "version": "1.0.4",
   "patches": [
     {
       "name": "Camera Looks Backport",
@@ -225,9 +225,7 @@
       "name": "Action Pan & Motion Blur for Unsupported Pixels",
       "description": "Unlocks Google's Action Pan and Long Exposure modes on unsupported Tensor devices (e.g. Pixel 6a bluejay) by clearing Google's device restrictions and enabling the lasagna capture pipeline.",
       "default": true,
-      "dependencies": [
-        "Camera Looks Backport"
-      ],
+      "dependencies": [],
       "compatiblePackages": [
         {
           "packageName": "com.google.android.GoogleCamera",

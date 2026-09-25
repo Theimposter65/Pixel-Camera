@@ -120,5 +120,15 @@ class SmokeTest {
         val content = file.readText()
         assertTrue(content.contains("Action Pan & Motion Blur for Unsupported Pixels"))
     }
+
+    @Test
+    fun testPatchesBundleContainsActionPan() {
+        val file = java.io.File("../../patches-bundle.json")
+        assertTrue(file.exists())
+        val content = file.readText()
+        assertTrue(content.contains("Action Pan & Motion Blur for Unsupported Pixels"))
+        assertTrue(content.contains("Theimposter65/Pixel-Camera"))
+    }
 }
+
 

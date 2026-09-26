@@ -8,6 +8,8 @@ import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction20t
 import com.android.tools.smali.dexlib2.builder.instruction.BuilderInstruction21t
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.reference.FieldReference
+import com.android.tools.smali.dexlib2.iface.reference.MethodReference
+import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 
 val actionPanPatch = bytecodePatch(
     name = "Action Pan & Motion Blur for Unsupported Pixels",
@@ -135,6 +137,79 @@ val actionPanPatch = bytecodePatch(
                                 break
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // ── 10. Shutter listener fallback: ensure ojc implements g() delegating to a() ──
+        mutableClassDefByOrNull("Lojc;")?.let { clazz ->
+            if (clazz.methods.none { it.name == "g" }) {
+                val aMethod = clazz.methods.firstOrNull {
+                    it.name == "a" && it.returnType == "V" && it.parameterTypes.isEmpty()
+                }
+                if (aMethod != null) {
+                    val newG = MutableMethod(aMethod)
+                    newG.name = "g"
+                    val smaliG = """
+                        invoke-virtual {p0}, Lojc;->a()V
+                        return-void
+                    """.trimIndent()
+                    val gInstructions = smaliG.toInstructions(newG)
+                    val gImpl = newG.implementation
+                    if (gImpl != null) {
+                        try {
+                            val field = gImpl.javaClass.getDeclaredField("tryBlocks")
+                            field.isAccessible = true
+                            (field.get(gImpl) as? MutableList<*>)?.clear()
+                        } catch (_: Throwable) {}
+                        while (gImpl.instructions.isNotEmpty()) {
+                            gImpl.removeInstruction(0)
+                        }
+                        for (ins in gInstructions) {
+                            gImpl.addInstruction(ins)
+                        }
+                        clazz.methods.add(newG)
+                    }
+                }
+            }
+        }
+
+        // ── 11. PictureTaker availability bypass: ensure captureImage runs unconditionally in par.a() ──
+        mutableClassDefByOrNull("Lpar;")?.let { clazz ->
+            clazz.methods.firstOrNull {
+                it.name == "a" && it.returnType == "V" && it.parameterTypes.isEmpty()
+            }?.let { method ->
+                val impl = method.implementation ?: return@let
+                val instructions = impl.instructions.toList()
+
+                val ifNezIndices = mutableListOf<Int>()
+                for (i in instructions.indices) {
+                    val ins = instructions[i]
+                    if (ins.opcode == Opcode.IF_NEZ && i >= 2) {
+                        val prev = instructions[i - 1]
+                        val prev2 = instructions[i - 2]
+                        if (prev.opcode == Opcode.MOVE_RESULT && prev2.opcode == Opcode.INVOKE_VIRTUAL) {
+                            val methodRef = (prev2 as? ReferenceInstruction)?.reference as? MethodReference
+                            if (methodRef?.name == "booleanValue" && methodRef.definingClass == "Ljava/lang/Boolean;") {
+                                ifNezIndices.add(i)
+                            }
+                        }
+                    }
+                }
+
+                if (ifNezIndices.size >= 2) {
+                    val secondIfNez = instructions[ifNezIndices[1]] as? BuilderInstruction21t
+                    val captureTarget = secondIfNez?.target
+                    if (captureTarget != null) {
+                        impl.replaceInstruction(
+                            ifNezIndices[1],
+                            BuilderInstruction20t(Opcode.GOTO_16, captureTarget)
+                        )
+                        impl.replaceInstruction(
+                            ifNezIndices[0],
+                            BuilderInstruction20t(Opcode.GOTO_16, captureTarget)
+                        )
                     }
                 }
             }

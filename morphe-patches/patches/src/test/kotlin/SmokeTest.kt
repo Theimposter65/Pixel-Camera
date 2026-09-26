@@ -290,6 +290,71 @@ class SmokeTest {
         assertTrue(verifiedOjdN, "ojd.n() readiness bypass must be in patched DEX")
         println("ojd.n() readiness bypass verified!")
     }
+
+    @Test
+    fun testVerifyOjcMethodG() {
+        val dexDir = java.io.File("build/tmp/test_patcher/patched_dex")
+        if (!dexDir.exists()) return
+
+        var verifiedOjcG = false
+        for (dexFile in dexDir.listFiles()?.sortedBy { it.name } ?: emptyList()) {
+            if (!dexFile.name.endsWith(".dex")) continue
+            val dex = com.android.tools.smali.dexlib2.DexFileFactory.loadDexFile(
+                dexFile, com.android.tools.smali.dexlib2.Opcodes.getDefault()
+            )
+            for (c in dex.classes) {
+                if (c.type == "Lojc;") {
+                    val gMethod = c.methods.firstOrNull { it.name == "g" && it.returnType == "V" && it.parameterTypes.isEmpty() }
+                    if (gMethod != null) {
+                        verifiedOjcG = true
+                    }
+                }
+            }
+        }
+        assertTrue(verifiedOjcG, "ojc must define method g()V delegating to a()")
+        println("ojc.g() delegation verified!")
+    }
+
+    @Test
+    fun testVerifyParPictureTakerBypass() {
+        val dexDir = java.io.File("build/tmp/test_patcher/patched_dex")
+        if (!dexDir.exists()) return
+
+        var verifiedParBypass = false
+        for (dexFile in dexDir.listFiles()?.sortedBy { it.name } ?: emptyList()) {
+            if (!dexFile.name.endsWith(".dex")) continue
+            val dex = com.android.tools.smali.dexlib2.DexFileFactory.loadDexFile(
+                dexFile, com.android.tools.smali.dexlib2.Opcodes.getDefault()
+            )
+            for (c in dex.classes) {
+                if (c.type == "Lpar;") {
+                    val aMethod = c.methods.firstOrNull { it.name == "a" && it.returnType == "V" && it.parameterTypes.isEmpty() }
+                    if (aMethod != null) {
+                        val ins = aMethod.implementation?.instructions?.toList() ?: emptyList()
+                        var gotoCount = 0
+                        for (i in ins.indices) {
+                            val inss = ins[i]
+                            if (inss.opcode == com.android.tools.smali.dexlib2.Opcode.GOTO_16 ||
+                                inss.opcode == com.android.tools.smali.dexlib2.Opcode.GOTO) {
+                                if (i >= 2) {
+                                    val prev = ins[i - 1]
+                                    val prev2 = ins[i - 2]
+                                    if (prev.opcode == com.android.tools.smali.dexlib2.Opcode.MOVE_RESULT &&
+                                        prev2.opcode == com.android.tools.smali.dexlib2.Opcode.INVOKE_VIRTUAL) {
+                                        gotoCount++
+                                    }
+                                }
+                            }
+                        }
+                        assertTrue(gotoCount >= 2, "Expected at least 2 GOTO replacements in par.a(), found $gotoCount")
+                        verifiedParBypass = true
+                    }
+                }
+            }
+        }
+        assertTrue(verifiedParBypass, "Lpar;->a() PictureTaker readiness bypass must be present")
+        println("Lpar;->a() PictureTaker readiness bypass verified!")
+    }
 }
 
 
